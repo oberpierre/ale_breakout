@@ -10,57 +10,7 @@ gym.register_envs(ale_py)
 
 
 import argparse
-import csv
-import os
-from datetime import datetime
-
-SCORES_DIR = "scores"
-LEADERBOARD_FILE = os.path.join(SCORES_DIR, "leaderboard.csv")
-
-def save_score(name, score, steps):
-    if not os.path.exists(SCORES_DIR):
-        os.makedirs(SCORES_DIR)
-        
-    file_exists = os.path.exists(LEADERBOARD_FILE)
-    
-    with open(LEADERBOARD_FILE, mode='a', newline='') as f:
-        writer = csv.writer(f)
-        if not file_exists:
-            writer.writerow(["Timestamp", "Name", "Score", "Steps"])
-        
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        writer.writerow([timestamp, name, score, steps])
-        print(f"Score saved for {name}: {score}")
-
-def get_leaderboard_stats():
-    if not os.path.exists(LEADERBOARD_FILE):
-        return 0.0, []
-        
-    scores = []
-    try:
-        with open(LEADERBOARD_FILE, mode='r') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                try:
-                    scores.append((row["Name"], float(row["Score"])))
-                except ValueError:
-                    continue
-    except Exception as e:
-        print(f"Error reading leaderboard: {e}")
-        return 0.0, []
-        
-    if not scores:
-        return 0.0, []
-        
-    # Calculate Average
-    total_score = sum(s[1] for s in scores)
-    avg_score = total_score / len(scores)
-    
-    # Get Top 10
-    scores.sort(key=lambda x: x[1], reverse=True)
-    top_10 = scores[:10]
-    
-    return avg_score, top_10
+import leaderboard
 
 def main():
     parser = argparse.ArgumentParser(description="Human Baseline for Atari Breakout")
@@ -192,7 +142,7 @@ def main():
             player_name = ""
             
             # Fetch baseline once
-            current_baseline, top_10_scores = get_leaderboard_stats()
+            current_baseline, top_10_scores = leaderboard.get_leaderboard_stats()
             
             while waiting_for_input:
                 # 1. Clear Screen & Draw Overlay each frame (to handle dynamic text)
@@ -281,10 +231,10 @@ def main():
                             if event.key == pygame.K_RETURN:
                                 if not player_name.strip():
                                     player_name = "???"
-                                save_score(player_name, total_score, step_counter)
+                                leaderboard.save_score(player_name, total_score, step_counter)
                                 name_submitted = True
                                 # Refresh baseline and stats
-                                current_baseline, top_10_scores = get_leaderboard_stats()
+                                current_baseline, top_10_scores = leaderboard.get_leaderboard_stats()
                             elif event.key == pygame.K_BACKSPACE:
                                 player_name = player_name[:-1]
                             elif event.key == pygame.K_SPACE:
