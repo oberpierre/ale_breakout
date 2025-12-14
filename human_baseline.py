@@ -8,7 +8,18 @@ from gymnasium.wrappers import ResizeObservation
 # Register ALE environments
 gym.register_envs(ale_py)
 
+
+import argparse
+
 def main():
+    parser = argparse.ArgumentParser(description="Human Baseline for Atari Breakout")
+    parser.add_argument("--steps", type=int, default=-1, help="Max steps to play (default: -1 for infinite)")
+    parser.add_argument("--reset", type=bool, default=False, help="Reset once episode is over (default: False)")
+    args = parser.parse_args()
+
+    max_steps = args.steps
+    reset = args.reset
+
     # Initialize Pygame
     pygame.init()
     pygame.display.set_caption("Atari Breakout - Human Baseline")
@@ -31,7 +42,6 @@ def main():
     
     total_score = 0.0
     step_counter = 0
-    max_steps = 1000
     counting_started = False
     
     running = True
@@ -40,8 +50,11 @@ def main():
     # Reset environment initially
     env.reset()
     
-    print(f"Game Ready. Press SPACE (FIRE) to start the 1000 step counter.")
-    print(f"Goal: Maximize score in 1000 steps.")
+    if max_steps > 0:
+        print(f"Game Ready. Press SPACE (FIRE) to start the {max_steps} step counter.")
+        print(f"Goal: Maximize score in {max_steps} steps.")
+    else:
+        print(f"Game Ready. Free Play Mode (Infinite Steps). Press SPACE to play.")
     
     while running:
         # 1. Event Handling
@@ -83,23 +96,29 @@ def main():
         screen.blit(surf, (0, 0))
         pygame.display.flip()
         
-        # 5. Check Termination of 1000 steps
-        if counting_started and step_counter >= max_steps:
+        # 5. Check Termination of steps (if limit set)
+        if max_steps > 0 and counting_started and step_counter >= max_steps:
              print(f"\nTime's up! Reached {max_steps} steps.")
              print(f"FINAL SCORE: {total_score}")
              running = False
              
         # 6. Handle Episode End
         if terminated or truncated:
-            # Auto-reset to keep playing if within 1000 steps
-            env.reset()
+            if reset:
+                # Auto-reset to keep playing
+                env.reset()
+            else:
+                running = False
             
         # 7. FPS Sync
         clock.tick(60)
         
         # Optional debug print
         if counting_started and step_counter % 100 == 0:
-            print(f"Step: {step_counter}/{max_steps} | Score: {total_score}")
+            if max_steps > 0:
+                print(f"Step: {step_counter}/{max_steps} | Score: {total_score}")
+            else:
+                print(f"Step: {step_counter} | Score: {total_score}")
 
     pygame.quit()
     env.close()
