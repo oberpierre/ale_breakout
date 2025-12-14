@@ -10,6 +10,57 @@ gym.register_envs(ale_py)
 
 
 import argparse
+import csv
+import os
+from datetime import datetime
+
+SCORES_DIR = "scores"
+LEADERBOARD_FILE = os.path.join(SCORES_DIR, "leaderboard.csv")
+
+def save_score(name, score, steps):
+    if not os.path.exists(SCORES_DIR):
+        os.makedirs(SCORES_DIR)
+        
+    file_exists = os.path.exists(LEADERBOARD_FILE)
+    
+    with open(LEADERBOARD_FILE, mode='a', newline='') as f:
+        writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow(["Timestamp", "Name", "Score", "Steps"])
+        
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        writer.writerow([timestamp, name, score, steps])
+        print(f"Score saved for {name}: {score}")
+
+def get_leaderboard_stats():
+    if not os.path.exists(LEADERBOARD_FILE):
+        return 0.0, []
+        
+    scores = []
+    try:
+        with open(LEADERBOARD_FILE, mode='r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                try:
+                    scores.append((row["Name"], float(row["Score"])))
+                except ValueError:
+                    continue
+    except Exception as e:
+        print(f"Error reading leaderboard: {e}")
+        return 0.0, []
+        
+    if not scores:
+        return 0.0, []
+        
+    # Calculate Average
+    total_score = sum(s[1] for s in scores)
+    avg_score = total_score / len(scores)
+    
+    # Get Top 10
+    scores.sort(key=lambda x: x[1], reverse=True)
+    top_10 = scores[:10]
+    
+    return avg_score, top_10
 
 def main():
     parser = argparse.ArgumentParser(description="Human Baseline for Atari Breakout")
@@ -24,6 +75,8 @@ def main():
     pygame.display.set_caption("Atari Breakout - Human Baseline")
     
     font = pygame.font.Font(None, 36)
+    small_font = pygame.font.Font(None, 24)
+
     
     # Initialize Environment
     # render_mode="rgb_array" is used because we will manually blit to pygame surface
@@ -134,51 +187,124 @@ def main():
             print("Displaying Game Over Screen...")
             waiting_for_input = True
             
-            # Create a semi-transparent overlay
-            overlay = pygame.Surface((screen_width * scale, screen_height * scale))
-            overlay.set_alpha(200)
-            overlay.fill((0, 0, 0))
-            screen.blit(overlay, (0, 0))
+            # Game Over State
+            name_submitted = False
+            player_name = ""
             
-            # Render Text
-            white = (255, 255, 255)
-            
-            text_game_over = font.render("GAME OVER", True, white)
-            text_score = font.render(f"Score: {total_score}", True, white)
-            text_relaunch = font.render("Press 'R' to Relaunch", True, white)
-            text_quit = font.render("Press 'Q' to Quit", True, white)
-            
-            # Centering helpers
-            cx = (screen_width * scale) // 2
-            cy = (screen_height * scale) // 2
-            
-            game_over_rect = text_game_over.get_rect(center=(cx, cy - 60))
-            score_rect = text_score.get_rect(center=(cx, cy - 20))
-            relaunch_rect = text_relaunch.get_rect(center=(cx, cy + 40))
-            quit_rect = text_quit.get_rect(center=(cx, cy + 80))
-            
-            screen.blit(text_game_over, game_over_rect)
-            screen.blit(text_score, score_rect)
-            screen.blit(text_relaunch, relaunch_rect)
-            screen.blit(text_quit, quit_rect)
-            
-            pygame.display.flip()
+            # Fetch baseline once
+            current_baseline, top_10_scores = get_leaderboard_stats()
             
             while waiting_for_input:
+                # 1. Clear Screen & Draw Overlay each frame (to handle dynamic text)
+                overlay = pygame.Surface((screen_width * scale, screen_height * scale))
+                # Simple approach: Fill screen black (or dark grey) for the menu
+                screen.fill((20, 20, 20))
+                
+                # Render Text
+                white = (255, 255, 255)
+                green = (0, 255, 0)
+                yellow = (255, 255, 0)
+                gray = (150, 150, 150)
+                
+                cx = (screen_width * scale) // 2
+                cy = (screen_height * scale) // 2
+                
+                if not name_submitted:
+                    # Title
+                    text_game_over = font.render("GAME OVER", True, white)
+                    game_over_rect = text_game_over.get_rect(center=(cx, cy - 100))
+                    screen.blit(text_game_over, game_over_rect)
+                    
+                    # Score
+                    text_score = font.render(f"Your Score: {total_score}", True, green)
+                    score_rect = text_score.get_rect(center=(cx, cy - 60))
+                    screen.blit(text_score, score_rect)
+
+                    # --- State 1: Name Entry ---
+                    prompt_text = font.render("Enter Name:", True, white)
+                    prompt_rect = prompt_text.get_rect(center=(cx, cy))
+                    screen.blit(prompt_text, prompt_rect)
+                    
+                    display_name = player_name if player_name else "???"
+                    color = white if player_name else gray
+                    input_text = font.render(display_name, True, color)
+                    input_rect = input_text.get_rect(center=(cx, cy + 40))
+                    screen.blit(input_text, input_rect)
+                    
+                    hint_text = font.render("Press ENTER to Submit", True, yellow)
+                    hint_rect = hint_text.get_rect(center=(cx, cy + 100))
+                    screen.blit(hint_text, hint_rect)
+                    
+                else:
+                    # --- State 2: Menu ---
+                    # Layout: Top (Summary), Middle (Leaderboard), Bottom (Controls)
+                    
+                    # 1. Summary (Top)
+                    summary_y = 60
+                    text_score = font.render(f"You: {player_name} - Score: {total_score}", True, green)
+                    score_rect = text_score.get_rect(center=(cx, summary_y))
+                    screen.blit(text_score, score_rect)
+                    
+                    baseline_text = small_font.render(f"Average: {current_baseline:.1f}", True, gray)
+                    baseline_rect = baseline_text.get_rect(center=(cx, summary_y + 30))
+                    screen.blit(baseline_text, baseline_rect)
+                    
+                    # 2. Leaderboard (Middle)
+                    lb_y_start = summary_y + 80
+                    lb_title = font.render("TOP 10 LEADERBOARD", True, yellow)
+                    lb_rect = lb_title.get_rect(center=(cx, lb_y_start))
+                    screen.blit(lb_title, lb_rect)
+                    
+                    for i, (name, score) in enumerate(top_10_scores):
+                        entry_str = f"{i+1}. {name} - {score:.0f}"
+                        entry_text = small_font.render(entry_str, True, white)
+                        entry_rect = entry_text.get_rect(center=(cx, lb_y_start + 40 + (i * 25)))
+                        screen.blit(entry_text, entry_rect)
+                        
+                    # 3. Controls (Bottom)
+                    controls_y = screen_height * scale - 60
+                    relaunch_text = font.render("Press 'R' to Relaunch, 'Q' to Quit", True, white)
+                    relaunch_rect = relaunch_text.get_rect(center=(cx, controls_y))
+                    screen.blit(relaunch_text, relaunch_rect)
+
+                pygame.display.flip()
+                
+                # Event Handling
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
                         waiting_for_input = False
                         running = False
                     
                     if event.type == pygame.KEYDOWN:
-                        if event.key == pygame.K_q or event.key == pygame.K_ESCAPE:
-                            waiting_for_input = False
-                            running = False
-                        elif event.key == pygame.K_r:
-                            waiting_for_input = False
-                            # running stays True, so outer loop repeats
+                        if not name_submitted:
+                            # State 1: Typing
+                            if event.key == pygame.K_RETURN:
+                                if not player_name.strip():
+                                    player_name = "???"
+                                save_score(player_name, total_score, step_counter)
+                                name_submitted = True
+                                # Refresh baseline and stats
+                                current_baseline, top_10_scores = get_leaderboard_stats()
+                            elif event.key == pygame.K_BACKSPACE:
+                                player_name = player_name[:-1]
+                            elif event.key == pygame.K_SPACE:
+                                player_name += " "
+                            else:
+                                # Add alphanumeric
+                                if len(player_name) < 15: # Limit length
+                                    # Use unicode to catch shift/caps correctly
+                                    if event.unicode.isprintable():
+                                        player_name += event.unicode
+                        else:
+                            # State 2: Menu
+                            if event.key == pygame.K_q or event.key == pygame.K_ESCAPE:
+                                waiting_for_input = False
+                                running = False
+                            elif event.key == pygame.K_r:
+                                waiting_for_input = False
+                                # running stays True, so outer loop repeats
 
-                clock.tick(10)
+                clock.tick(30)
 
     pygame.quit()
     env.close()
