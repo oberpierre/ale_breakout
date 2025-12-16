@@ -142,7 +142,9 @@ def main():
             player_name = ""
             
             # Fetch baseline once
-            current_baseline, top_10_scores = leaderboard.get_leaderboard_stats()
+            # Note: We pass total_score to find our rank. 
+            # Limitation: If multiple people have duplicate scores, this returns rank of first match.
+            current_baseline, top_10_scores, player_rank = leaderboard.get_leaderboard_stats(total_score if name_submitted else None)
             
             while waiting_for_input:
                 # 1. Clear Screen & Draw Overlay each frame (to handle dynamic text)
@@ -159,6 +161,10 @@ def main():
                 cx = (screen_width * scale) // 2
                 cy = (screen_height * scale) // 2
                 
+                # Helper for flexible number formatting
+                def fmt_num(n):
+                    return f"{int(n)}" if n == int(n) else f"{n:.1f}"
+
                 if not name_submitted:
                     # Title
                     text_game_over = font.render("GAME OVER", True, white)
@@ -166,7 +172,7 @@ def main():
                     screen.blit(text_game_over, game_over_rect)
                     
                     # Score
-                    text_score = font.render(f"Your Score: {total_score}", True, green)
+                    text_score = font.render(f"Your Score: {fmt_num(total_score)}", True, green)
                     score_rect = text_score.get_rect(center=(cx, cy - 60))
                     screen.blit(text_score, score_rect)
 
@@ -191,11 +197,12 @@ def main():
                     
                     # 1. Summary (Top)
                     summary_y = 60
-                    text_score = font.render(f"You: {player_name} - Score: {total_score}", True, green)
+                    rank_str = f"#{player_rank} " if player_rank else ""
+                    text_score = font.render(f"You: {rank_str}{player_name} - Score: {fmt_num(total_score)}", True, green)
                     score_rect = text_score.get_rect(center=(cx, summary_y))
                     screen.blit(text_score, score_rect)
                     
-                    baseline_text = small_font.render(f"Average: {current_baseline:.1f}", True, gray)
+                    baseline_text = small_font.render(f"Average: {fmt_num(current_baseline)}", True, gray)
                     baseline_rect = baseline_text.get_rect(center=(cx, summary_y + 30))
                     screen.blit(baseline_text, baseline_rect)
                     
@@ -206,7 +213,7 @@ def main():
                     screen.blit(lb_title, lb_rect)
                     
                     for i, (name, score) in enumerate(top_10_scores):
-                        entry_str = f"{i+1}. {name} - {score:.0f}"
+                        entry_str = f"{i+1}. {name} - {fmt_num(score)}"
                         entry_text = small_font.render(entry_str, True, white)
                         entry_rect = entry_text.get_rect(center=(cx, lb_y_start + 40 + (i * 25)))
                         screen.blit(entry_text, entry_rect)
@@ -233,8 +240,8 @@ def main():
                                     player_name = "???"
                                 leaderboard.save_score(player_name, total_score, step_counter)
                                 name_submitted = True
-                                # Refresh baseline and stats
-                                current_baseline, top_10_scores = leaderboard.get_leaderboard_stats()
+                                # Refresh baseline and stats with rank
+                                current_baseline, top_10_scores, player_rank = leaderboard.get_leaderboard_stats(total_score)
                             elif event.key == pygame.K_BACKSPACE:
                                 player_name = player_name[:-1]
                             elif event.key == pygame.K_SPACE:
