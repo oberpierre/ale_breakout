@@ -46,17 +46,23 @@ def get_leaderboard_stats(target_score=None):
     
     # Sort for ranking and top 10
     scores.sort(key=lambda x: x[1], reverse=True)
-    top_10 = scores[:10]
+    
+    # Calculate ranks with ties (Standard Competition Ranking 1224)
+    ranked_scores = []
+    current_rank = 1
+    for i, (name, s) in enumerate(scores):
+        if i > 0 and s < scores[i-1][1]:
+            current_rank = i + 1
+        ranked_scores.append((current_rank, name, s))
+        
+    top_10 = ranked_scores[:10]
     
     player_rank = None
     if target_score is not None:
-        # Calculate rank: 1-based index where this score would fall
-        # If duplicated, we take the best possible rank (first occurrence)
-        # However, target_score matches exactly one of the entries usually if we just saved it.
-        # But simply comparing values:
-        for i, (name, s) in enumerate(scores):
+        # Find the rank for this score
+        for r, n, s in ranked_scores:
             if s == target_score:
-                player_rank = i + 1
+                player_rank = r
                 break
     
     return avg_score, top_10, player_rank

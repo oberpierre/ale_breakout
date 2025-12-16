@@ -212,8 +212,8 @@ def main():
                     lb_rect = lb_title.get_rect(center=(cx, lb_y_start))
                     screen.blit(lb_title, lb_rect)
                     
-                    for i, (name, score) in enumerate(top_10_scores):
-                        entry_str = f"{i+1}. {name} - {fmt_num(score)}"
+                    for i, (rank, name, score) in enumerate(top_10_scores):
+                        entry_str = f"{rank}. {name} - {fmt_num(score)}"
                         entry_text = small_font.render(entry_str, True, white)
                         entry_rect = entry_text.get_rect(center=(cx, lb_y_start + 40 + (i * 25)))
                         screen.blit(entry_text, entry_rect)
